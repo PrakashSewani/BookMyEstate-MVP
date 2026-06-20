@@ -1,39 +1,52 @@
-import { withAuth } from "next-auth/middleware"
 import { NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
+import * as jose from "jose"
 
-export default withAuth(
-  function middleware(req) {
-    const token = req.nextauth.token
-    const pathname = req.nextUrl.pathname
-    const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/register")
-    const isAdminPage = pathname.startsWith("/admin")
-    const isOnboarding = pathname.startsWith("/onboarding")
-    const isApiAuth = pathname.startsWith("/api/auth")
+const COOKIE_NAME = process.env.NODE_ENV === "production"
+  ? "__Secure-authjs.session-token"
+  : "authjs.session-token"
 
-    if (isApiAuth) return NextResponse.next()
+export async function middleware(req: NextRequest) {
+  const pathname = req.nextUrl.pathname
+  const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/register")
+  const isAdminPage = pathname.startsWith("/admin")
+  const isOnboarding = pathname.startsWith("/onboarding")
+  const isApiAuth = pathname.startsWith("/api/auth")
 
-    if (isAuthPage && token) {
-      const isAdmin = token.role === "ADMIN"
-      return NextResponse.redirect(new URL(isAdmin ? "/admin" : "/feed", req.url))
+  if (isApiAuth) return NextResponse.next()
+
+  const token = req.cookies.get(COOKIE_NAME)?.value
+  let payload: Record<string, unknown> | null = null
+
+  if (token) {
+    try {
+      const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET)
+      const { payload: decoded } = await jose.jwtVerify(token, secret)
+      payload = decoded as Record<string, unknown>
+    } catch {
+      // invalid token
     }
-
-    if (isAdminPage && token?.role !== "ADMIN") {
-      return NextResponse.redirect(new URL("/feed", req.url))
-    }
-
-    if (isOnboarding && token?.role === "ADMIN") {
-      return NextResponse.redirect(new URL("/admin", req.url))
-    }
-
-    return NextResponse.next()
-  },
-  {
-    pages: { signIn: "/login" },
-    callbacks: {
-      authorized: ({ token }) => !!token,
-    },
   }
-)
+
+  if (isAuthPage && payload) {
+    const isAdmin = payload.role === "ADMIN"
+    return NextResponse.redirect(new URL(isAdmin ? "/admin" : "/feed", req.url))
+  }
+
+  if (!payload && !isAuthPage) {
+    return NextResponse.redirect(new URL("/login", req.url))
+  }
+
+  if (isAdminPage && payload?.role !== "ADMIN") {
+    return NextResponse.redirect(new URL("/feed", req.url))
+  }
+
+  if (isOnboarding && payload?.role === "ADMIN") {
+    return NextResponse.redirect(new URL("/admin", req.url))
+  }
+
+  return NextResponse.next()
+}
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
