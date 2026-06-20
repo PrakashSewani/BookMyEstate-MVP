@@ -17,16 +17,22 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
+    console.log("[login] submitting", { email });
+
     const result = await signIn("credentials", {
       email,
       password,
       redirect: false,
     });
 
+    console.log("[login] result", result);
+
     if (result?.error) {
+      console.log("[login] error", result.error);
       setError("Invalid email or password");
       setLoading(false);
     } else {
+      console.log("[login] success, redirecting to /feed");
       router.push("/feed");
       router.refresh();
     }
