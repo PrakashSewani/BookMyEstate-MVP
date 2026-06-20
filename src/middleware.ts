@@ -6,6 +6,8 @@ const COOKIE_NAME = process.env.NODE_ENV === "production"
   ? "__Secure-authjs.session-token"
   : "authjs.session-token"
 
+const AUTH_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || ""
+
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname
   const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/register")
@@ -20,11 +22,13 @@ export async function middleware(req: NextRequest) {
   const rawCookie = req.cookies.get(COOKIE_NAME)?.value
   console.log("[middleware] cookie", { found: !!rawCookie, cookieName: COOKIE_NAME })
 
+  console.log("[middleware] auth secret", { found: !!AUTH_SECRET, length: AUTH_SECRET.length })
+
   let payload: Record<string, unknown> | null = null
 
   if (rawCookie) {
     try {
-      const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET)
+      const secret = new TextEncoder().encode(AUTH_SECRET)
       const { payload: decoded } = await jose.jwtVerify(rawCookie, secret)
       payload = decoded as Record<string, unknown>
       console.log("[middleware] token verified", { email: payload.email, role: payload.role })
