@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   String   @id @default(cuid())
+  email                String   @unique
+  name                 String?
+  password             String
+  role                 String   @default("USER")
+  onboardingCompleted  Boolean  @default(false)
+  createdAt            DateTime @default(now())
+
+  behaviors          UserBehavior[]
+  leads              Lead[]
+  inferredPreference InferredPreference?
+}
+
+model Property {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  price       Int
+  location    String
+  propertyType String
+  bhk         Int
+  areaSqFt    Int
+  images      String   @default("[]")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  behaviors UserBehavior[]
+  leads     Lead[]
+}
+
+model UserBehavior {
+  id           String   @id @default(cuid())
+  userId       String
+  propertyId   String
+  action       String
+  viewDuration Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@index([userId])
+  @@index([propertyId])
+}
+
+model Lead {
+  id         String   @id @default(cuid())
+  userId     String
+  propertyId String
+  name       String
+  phone      String
+  email      String
+  message    String?
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id])
+}
+
+model InferredPreference {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  locationScores String   @default("{}")
+  typeScores     String   @default("{}")
+  budgetMin      Int      @default(0)
+  budgetMax      Int      @default(0)
+  lastUpdated    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
