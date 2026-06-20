@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import * as jose from "jose"
+import { jwtDecrypt } from "jose"
+import { hkdf } from "@panva/hkdf"
 
 const COOKIE_NAME = process.env.NODE_ENV === "production"
   ? "__Secure-authjs.session-token"
   : "authjs.session-token"
 
 const AUTH_SECRET = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || ""
+
+function getDerivedEncryptionKey(keyMaterial: string, salt: string): Promise<Uint8Array> {
+  return hkdf("sha256", keyMaterial, salt, `Auth.js Generated Encryption Key (${salt})`, 64)
+}
 
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname
@@ -28,8 +33,11 @@ export async function middleware(req: NextRequest) {
 
   if (rawCookie) {
     try {
-      const secret = new TextEncoder().encode(AUTH_SECRET)
-      const { payload: decoded } = await jose.jwtVerify(rawCookie, secret)
+      const encryptionSecret = await getDerivedEncryptionKey(AUTH_SECRET, COOKIE_NAME)
+      const { payload: decoded } = await jwtDecrypt(rawCookie, encryptionSecret, {
+        keyManagementAlgorithms: ["dir"],
+        contentEncryptionAlgorithms: ["A256CBC-HS512", "A256GCM"],
+      })
       payload = decoded as Record<string, unknown>
       console.log("[middleware] token verified", { email: payload.email, role: payload.role })
     } catch (err) {
